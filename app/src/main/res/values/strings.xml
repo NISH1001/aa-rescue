@@ -1,0 +1,3 @@
+<resources>
+    <string name="clicker_description">Taps Start in Google Maps right after Android Auto drops, so navigation resumes on the phone without you touching it. Only acts inside Google Maps, only for ~20 seconds after a disconnect.</string>
+</resources>
