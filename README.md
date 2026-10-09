@@ -18,9 +18,10 @@ the top pauses everything.
 ## Privacy
 
 - **No internet permission.** Nothing the app sees can leave the phone.
-- **Accessibility is scoped to Google Maps only** (`res/xml/maps_clicker.xml`), and the
-  app only acts on it for ~25 seconds after a drop. Android shows its generic
-  "full control" warning for every accessibility app regardless.
+- **Accessibility is scoped to Google Maps.** It only receives events from Maps
+  (`res/xml/maps_clicker.xml`), only reads the screen while Maps is the app in front,
+  and only acts for ~25 seconds after a drop, looking for a "Start"/"Resume" button.
+  Android shows its generic "full control" warning for every accessibility app regardless.
 - **Notification access** is used to press play on the music app and to see whether
   Maps has an active trip notification.
 

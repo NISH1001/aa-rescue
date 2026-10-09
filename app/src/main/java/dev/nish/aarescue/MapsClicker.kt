@@ -8,8 +8,9 @@ import android.view.accessibility.AccessibilityNodeInfo
 
 /**
  * Taps Google Maps' "Start"/"Resume" button, but only while Rescue has armed it
- * right after an Android Auto drop. Restricted to the Maps package in
- * res/xml/maps_clicker.xml, so it never sees any other app.
+ * right after an Android Auto drop. Events are restricted to the Maps package
+ * in res/xml/maps_clicker.xml, and the screen is only read while Maps is in
+ * front, so no other app's content is ever looked at.
  */
 class MapsClicker : AccessibilityService() {
 
@@ -46,9 +47,8 @@ class MapsClicker : AccessibilityService() {
     }
 
     private fun tryClick(): Boolean {
-        val root = windows.firstOrNull { it.root?.packageName == Rescue.MAPS }?.root
-            ?: rootInActiveWindow?.takeIf { it.packageName == Rescue.MAPS }
-            ?: return false
+        // Only ever look at the screen when Maps is the app in front.
+        val root = rootInActiveWindow?.takeIf { it.packageName == Rescue.MAPS } ?: return false
         val target = find(root) ?: return false
         var node: AccessibilityNodeInfo? = target
         while (node != null && !node.isClickable) node = node.parent
