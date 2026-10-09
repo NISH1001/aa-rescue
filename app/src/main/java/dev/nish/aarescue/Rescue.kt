@@ -92,10 +92,10 @@ object Rescue {
     }
 
     /** "Test a drop" button: note what's playing *now*, pause it, then run a fake drop. */
-    fun simulateDrop() {
+    fun simulateDrop(forceNav: Boolean = false) {
         val playing = MediaWatcher.playingPackage()
         MediaWatcher.pauseAll()
-        main.postDelayed({ onDropped(test = true, playingAtTest = playing) }, 500)
+        main.postDelayed({ onDropped(test = true, playingAtTest = playing, forceNav = forceNav) }, 500)
     }
 
     /**

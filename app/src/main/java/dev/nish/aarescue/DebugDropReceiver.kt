@@ -12,6 +12,6 @@ import android.content.Intent
 class DebugDropReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         Rescue.init(context)
-        Rescue.onDropped(test = true, forceNav = intent.getBooleanExtra("nav", false))
+        Rescue.simulateDrop(forceNav = intent.getBooleanExtra("nav", false))
     }
 }

@@ -9,13 +9,29 @@ Google Maps falls out of navigation. AA Rescue notices the drop and puts things 
 Nothing that was off gets turned on. Both behaviors can be toggled, and the switch at
 the top pauses everything.
 
+<p align="center">
+  <img src="docs/main.png" width="280" alt="Main screen: toggles, test button, recent drops">
+  &nbsp;&nbsp;
+  <img src="docs/info.png" width="280" alt="Info sheet: pausing vs. turning off">
+</p>
+
+## Privacy
+
+- **No internet permission.** Nothing the app sees can leave the phone.
+- **Accessibility is scoped to Google Maps only** (`res/xml/maps_clicker.xml`), and the
+  app only acts on it for ~25 seconds after a drop. Android shows its generic
+  "full control" warning for every accessibility app regardless.
+- **Notification access** is used to press play on the music app and to see whether
+  Maps has an active trip notification.
+
 ## Install
 
-Download `release/aa-rescue-0.3.apk` to the phone and open it (allow installs from that
+Download the APK from the [latest release](../../releases/latest) (or
+`release/aa-rescue-0.1.0.apk` in this repo) to the phone and open it (allow installs from that
 source), or with adb:
 
 ```sh
-adb install -r release/aa-rescue-0.3.apk
+adb install -r release/aa-rescue-0.1.0.apk
 ```
 
 Then open AA Rescue and finish Setup:
