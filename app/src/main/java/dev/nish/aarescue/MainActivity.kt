@@ -10,6 +10,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -105,6 +106,8 @@ private fun Home() {
                 nav = it; Prefs.setResumeNav(ctx, it)
             }
         }
+
+        TimingSection(enabled)
 
         Section("Try it") {
             Text(
@@ -269,6 +272,67 @@ private fun ToggleRow(
             Text(body, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Switch(checked = checked, onCheckedChange = onChange, enabled = enabled)
+    }
+}
+
+@Composable
+private fun TimingSection(enabled: Boolean) {
+    val ctx = LocalContext.current
+    var open by remember { mutableStateOf(false) }
+    var values by remember { mutableStateOf(Timing.entries.associateWith { it.get(ctx) }) }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            Modifier.fillMaxWidth().clickable { open = !open }.padding(start = 4.dp, top = 4.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "Timing",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.weight(1f),
+            )
+            Icon(
+                if (open) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                if (open) "Hide timing" else "Show timing",
+                tint = MaterialTheme.colorScheme.primary,
+            )
+        }
+        if (!open) return@Column
+        ElevatedCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                Timing.entries.forEach { t ->
+                    val v = values.getValue(t)
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(t.title, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                            Text(
+                                t.format(v) + if (v == t.defaultMs) "" else "  (default ${t.format(t.defaultMs)})",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = if (v == t.defaultMs) MaterialTheme.colorScheme.onSurfaceVariant
+                                else MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                        Text(t.help, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Slider(
+                            value = v.toFloat(),
+                            onValueChange = {
+                                val snapped = (Math.round(it / t.stepMs) * t.stepMs).coerceIn(t.minMs, t.maxMs)
+                                values = values + (t to snapped)
+                            },
+                            onValueChangeFinished = { t.set(ctx, values.getValue(t)) },
+                            valueRange = t.minMs.toFloat()..t.maxMs.toFloat(),
+                            steps = ((t.maxMs - t.minMs) / t.stepMs - 1).toInt(),
+                            enabled = enabled,
+                        )
+                    }
+                }
+                TextButton(
+                    onClick = { Timing.resetAll(ctx); values = Timing.entries.associateWith { it.get(ctx) } },
+                    enabled = enabled && values.any { (t, v) -> v != t.defaultMs },
+                    modifier = Modifier.align(Alignment.End),
+                ) { Text("Reset to defaults") }
+            }
+        }
     }
 }
 

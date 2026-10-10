@@ -22,18 +22,9 @@ import androidx.car.app.connection.CarConnection
 object Rescue {
     const val MAPS = "com.google.android.apps.maps"
 
-    /**
-     * Music that stopped this close to the drop counts as stopped *by* the drop
-     * (the pause and the disconnect arrive within a few hundred ms of each other).
-     * Kept short so a pause you made yourself just before isn't undone.
-     */
-    private const val MUSIC_GRACE_MS = 1_000L
     /** Maps may pull its trip notification just before the drop is reported. */
     private const val NAV_GRACE_MS = 5_000L
-    private const val MUSIC_TICKS = 8
     private const val MUSIC_TICK_MS = 500L
-    private const val NAV_CLICK_WINDOW_MS = 25_000L
-    private const val UNLOCK_WAIT_MS = 5 * 60_000L
 
     private val main = Handler(Looper.getMainLooper())
     private lateinit var app: Context
@@ -90,7 +81,7 @@ object Rescue {
 
     fun onDropped(test: Boolean = false, playingAtTest: String? = null, forceNav: Boolean = false) {
         val now = SystemClock.elapsedRealtime()
-        val musicPkg = if (test) playingAtTest else MediaWatcher.musicStoppedByDrop(now - MUSIC_GRACE_MS)
+        val musicPkg = if (test) playingAtTest else MediaWatcher.musicStoppedByDrop(now - Timing.MUSIC_GRACE.get(app))
         val navigating = forceNav || MediaWatcher.wasNavigatingSince(now - NAV_GRACE_MS)
         if (!Prefs.enabled(app)) {
             RescueLog.i("DROP ignored: AA Rescue is paused")
@@ -113,8 +104,9 @@ object Rescue {
 
         // Play almost immediately; if the drop's own "audio unplugged" pause lands
         // after ours, the retry loop presses play again.
-        if (doMusic) main.postDelayed({ resumeMusic(musicPkg!!, attempt = 1) }, 300)
-        if (doNav) main.postDelayed({ resumeNav() }, 300)
+        val react = Timing.REACT.get(app)
+        if (doMusic) main.postDelayed({ resumeMusic(musicPkg!!, attempt = 1) }, react)
+        if (doNav) main.postDelayed({ resumeNav() }, react)
     }
 
     /** "Test a drop" button: note what's playing *now*, pause it, then run a fake drop. */
@@ -134,7 +126,7 @@ object Rescue {
         if (!MediaWatcher.isPlaying(pkg)) {
             RescueLog.i("music: play() on $pkg attempt $attempt sent=${MediaWatcher.play(pkg)}")
         }
-        if (attempt < MUSIC_TICKS) {
+        if (attempt < Timing.MUSIC_HOLD.get(app) / MUSIC_TICK_MS) {
             main.postDelayed({ resumeMusic(pkg, attempt + 1) }, MUSIC_TICK_MS)
             return
         }
@@ -146,7 +138,8 @@ object Rescue {
     private fun resumeNav() {
         if (isProjecting()) return
         navResumeStartedAt = SystemClock.elapsedRealtime()
-        navClickDeadline = navResumeStartedAt + NAV_CLICK_WINDOW_MS
+        val findMs = Timing.NAV_FIND.get(app)
+        navClickDeadline = navResumeStartedAt + findMs
         RescueLog.i("nav: bringing Maps forward, Start-tap armed")
         // WakeActivity turns the screen on, dismisses the keyguard if it can,
         // then opens Maps in its existing state (route preview with Start).
@@ -165,7 +158,7 @@ object Rescue {
                 navClickDeadline = 0L
                 RescueLog.event("Opened Maps but couldn't find Start")
             }
-        }, NAV_CLICK_WINDOW_MS)
+        }, findMs)
     }
 
     @Volatile private var navResumeStartedAt = 0L
@@ -189,6 +182,10 @@ object Rescue {
     fun onNavBlocked() {
         navClickDeadline = 0L
         if (waitingForUnlock != null) return
+        if (Timing.UNLOCK_WAIT.get(app) == 0L) {
+            RescueLog.event("Couldn't open Maps — phone is locked")
+            return
+        }
         RescueLog.event("Phone is locked — will restart navigation as soon as you unlock")
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(c: Context, i: Intent) {
@@ -200,7 +197,7 @@ object Rescue {
         }
         app.registerReceiver(receiver, IntentFilter(Intent.ACTION_USER_PRESENT))
         waitingForUnlock = receiver
-        main.postDelayed({ stopWaitingForUnlock() }, UNLOCK_WAIT_MS)
+        main.postDelayed({ stopWaitingForUnlock() }, Timing.UNLOCK_WAIT.get(app))
     }
 
     private var waitingForUnlock: BroadcastReceiver? = null

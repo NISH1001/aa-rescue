@@ -7,7 +7,8 @@ Google Maps falls out of navigation. AA Rescue notices the drop and puts things 
 - **Navigation** — brings Google Maps forward and taps **Start**, but only during an active trip.
 
 Nothing that was off gets turned on. Both behaviors can be toggled, and the switch at
-the top pauses everything.
+the top pauses everything. Timings (reaction delay, how long to keep music playing, how long
+to wait for an unlock, etc.) are adjustable under **Timing**.
 
 <p align="center">
   <img src="docs/main.png" width="280" alt="Main screen: toggles, test button, recent drops">
@@ -28,11 +29,11 @@ the top pauses everything.
 ## Install
 
 Download the APK from the [latest release](../../releases/latest) (or
-`release/aa-rescue-0.1.1.apk` in this repo) to the phone and open it (allow installs from that
+`release/aa-rescue-0.1.2.apk` in this repo) to the phone and open it (allow installs from that
 source), or with adb:
 
 ```sh
-adb install -r release/aa-rescue-0.1.1.apk
+adb install -r release/aa-rescue-0.1.2.apk
 ```
 
 Then open AA Rescue and finish Setup:
