@@ -29,11 +29,11 @@ to wait for an unlock, etc.) are adjustable under **Timing**.
 ## Install
 
 Download the APK from the [latest release](../../releases/latest) (or
-`release/aa-rescue-0.1.3.apk` in this repo) to the phone and open it (allow installs from that
+`release/aa-rescue-0.1.4.apk` in this repo) to the phone and open it (allow installs from that
 source), or with adb:
 
 ```sh
-adb install -r release/aa-rescue-0.1.3.apk
+adb install -r release/aa-rescue-0.1.4.apk
 ```
 
 Then open AA Rescue and finish Setup:
@@ -57,6 +57,14 @@ Read the app's trace log (adb only):
 
 ```sh
 adb shell dumpsys activity service dev.nish.aarescue/.MediaWatcher
+```
+
+End-to-end test with a real Android Auto session (Desktop Head Unit) and a real drop —
+see the header of `scripts/e2e.sh` for setup:
+
+```sh
+scripts/e2e.sh <adb-serial> music_nav   # music + navigation must come back after the drop
+scripts/e2e.sh <adb-serial> nothing     # nothing playing → nothing gets started
 ```
 
 Fake a drop for testing (adb only):

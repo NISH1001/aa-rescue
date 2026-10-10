@@ -98,6 +98,7 @@ class MediaWatcher : NotificationListenerService() {
         }
         if (!isNavNotification(sbn.notification)) return
         if (navKey == null) {
+            navFirstSeenAt = SystemClock.elapsedRealtime()
             val e = sbn.notification.extras
             RescueLog.i(
                 "nav notification seen: title=${e.getCharSequence(Notification.EXTRA_TITLE)} " +
@@ -126,6 +127,7 @@ class MediaWatcher : NotificationListenerService() {
         private val stoppedAt = mutableMapOf<String, Long>()
         @Volatile private var navKey: String? = null
         @Volatile private var navLastSeenAt = 0L
+        @Volatile private var navFirstSeenAt = 0L
         private val seenMapsKeys = mutableSetOf<String>()
 
         fun isPlaying(pkg: String) = pkg in playingNow
@@ -148,8 +150,14 @@ class MediaWatcher : NotificationListenerService() {
 
         fun wasNavigatingSince(since: Long) = navKey != null || navLastSeenAt >= since
 
-        /** Maps has posted/updated its trip notification at or after [since]. */
-        fun navigatingNowSince(since: Long) = navKey != null && navLastSeenAt >= since
+        /**
+         * Maps has had a trip notification up continuously since at/after [since],
+         * for at least [stableMs]. Right after a drop Maps flashes one briefly,
+         * so a short-lived one doesn't count.
+         */
+        fun navigatingNowSince(since: Long, stableMs: Long = 3_000) =
+            navKey != null && navFirstSeenAt >= since &&
+                SystemClock.elapsedRealtime() - navFirstSeenAt >= stableMs
 
         /** Press play on [pkg]'s session; falls back to a media key if it has none. */
         fun play(pkg: String): Boolean {

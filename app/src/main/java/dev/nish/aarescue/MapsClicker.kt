@@ -15,7 +15,12 @@ import android.view.accessibility.AccessibilityNodeInfo
 class MapsClicker : AccessibilityService() {
 
     private val main = Handler(Looper.getMainLooper())
-    private val labels = listOf("start", "resume", "start navigation", "resume navigation")
+    // After an Android Auto drop Maps may show the route preview ("Start"), a
+    // paused trip ("Resume"), or the trip summary card ("Restart").
+    private val labels = listOf(
+        "start", "resume", "restart",
+        "start navigation", "resume navigation", "restart navigation",
+    )
 
     override fun onServiceConnected() {
         instance = this
@@ -47,14 +52,18 @@ class MapsClicker : AccessibilityService() {
     }
 
     private fun tryClick(): Boolean {
-        if (Rescue.navAlreadyRunning()) {
-            Rescue.onNavStarted(button = null)
-            main.removeCallbacksAndMessages(null)
-            return true
-        }
         // Only ever look at the screen when Maps is the app in front.
-        val root = rootInActiveWindow?.takeIf { it.packageName == Rescue.MAPS } ?: return false
-        val target = find(root) ?: return false
+        val root = rootInActiveWindow?.takeIf { it.packageName == Rescue.MAPS }
+        val target = root?.let { find(it) }
+        if (target == null) {
+            // No button to tap: fine only if Maps is genuinely navigating again.
+            if (Rescue.navAlreadyRunning()) {
+                Rescue.onNavStarted(button = null)
+                main.removeCallbacksAndMessages(null)
+                return true
+            }
+            return false
+        }
         var node: AccessibilityNodeInfo? = target
         while (node != null && !node.isClickable) node = node.parent
         val clicked = node?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true
