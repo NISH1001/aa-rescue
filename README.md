@@ -28,11 +28,11 @@ the top pauses everything.
 ## Install
 
 Download the APK from the [latest release](../../releases/latest) (or
-`release/aa-rescue-0.1.0.apk` in this repo) to the phone and open it (allow installs from that
+`release/aa-rescue-0.1.1.apk` in this repo) to the phone and open it (allow installs from that
 source), or with adb:
 
 ```sh
-adb install -r release/aa-rescue-0.1.0.apk
+adb install -r release/aa-rescue-0.1.1.apk
 ```
 
 Then open AA Rescue and finish Setup:
@@ -50,6 +50,12 @@ The APK is signed with a debug key (personal sideload build, not for the Play St
 
 ```sh
 ./gradlew assembleRelease   # app/build/outputs/apk/release/app-release.apk
+```
+
+Read the app's trace log (adb only):
+
+```sh
+adb shell dumpsys activity service dev.nish.aarescue/.MediaWatcher
 ```
 
 Fake a drop for testing (adb only):

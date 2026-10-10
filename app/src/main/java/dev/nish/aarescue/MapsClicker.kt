@@ -47,6 +47,11 @@ class MapsClicker : AccessibilityService() {
     }
 
     private fun tryClick(): Boolean {
+        if (Rescue.navAlreadyRunning()) {
+            Rescue.onNavStarted(button = null)
+            main.removeCallbacksAndMessages(null)
+            return true
+        }
         // Only ever look at the screen when Maps is the app in front.
         val root = rootInActiveWindow?.takeIf { it.packageName == Rescue.MAPS } ?: return false
         val target = find(root) ?: return false

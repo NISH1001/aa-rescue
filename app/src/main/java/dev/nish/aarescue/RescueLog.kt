@@ -39,6 +39,9 @@ object RescueLog {
             .joinToString("") { "${it.time}\t${it.text}\n" })
     }
 
+    @Synchronized
+    fun readTrace(): String = trace?.takeIf { it.exists() }?.readText().orEmpty()
+
     /** Newest first. */
     @Synchronized
     fun readEvents(): List<Event> =

@@ -47,6 +47,11 @@ class MediaWatcher : NotificationListenerService() {
         if (instance === this) instance = null
     }
 
+    /** `adb shell dumpsys activity service dev.nish.aarescue/.MediaWatcher` prints the trace log. */
+    override fun dump(fd: java.io.FileDescriptor?, writer: java.io.PrintWriter, args: Array<out String>?) {
+        writer.print(RescueLog.readTrace())
+    }
+
     private fun track(list: List<MediaController>) {
         callbacks.keys.filter { old -> list.none { it.sessionToken == old.sessionToken } }.forEach {
             it.unregisterCallback(callbacks.remove(it)!!)
@@ -131,6 +136,9 @@ class MediaWatcher : NotificationListenerService() {
         }
 
         fun wasNavigatingSince(since: Long) = navKey != null || navLastSeenAt >= since
+
+        /** Maps has posted/updated its trip notification at or after [since]. */
+        fun navigatingNowSince(since: Long) = navKey != null && navLastSeenAt >= since
 
         /** Press play on [pkg]'s session; falls back to a media key if it has none. */
         fun play(pkg: String): Boolean {

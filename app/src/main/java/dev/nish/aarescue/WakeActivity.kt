@@ -7,15 +7,25 @@ import android.os.Bundle
 
 /** Invisible: wakes the screen, gets past the lock screen if allowed, then opens Maps. */
 class WakeActivity : Activity() {
+    private var asked = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setShowWhenLocked(true)
         setTurnScreenOn(true)
         val km = getSystemService(KeyguardManager::class.java)
-        if (!km.isKeyguardLocked) {
-            openMaps()
-            return
-        }
+        // isDeviceLocked is false when a trusted device (Extend Unlock) is keeping
+        // the phone unlocked; then the lock screen can be dismissed without a PIN.
+        RescueLog.i("nav: keyguardLocked=${km.isKeyguardLocked} deviceLocked=${km.isDeviceLocked}")
+        if (!km.isKeyguardLocked) openMaps()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        // Asking before we're actually showing over the lock screen gets cancelled.
+        if (!hasFocus || asked || isFinishing) return
+        asked = true
+        val km = getSystemService(KeyguardManager::class.java)
         km.requestDismissKeyguard(this, object : KeyguardManager.KeyguardDismissCallback() {
             override fun onDismissSucceeded() = openMaps()
             override fun onDismissCancelled() = fail("cancelled")
@@ -37,7 +47,7 @@ class WakeActivity : Activity() {
 
     private fun fail(why: String) {
         RescueLog.i("nav: could not get past lock screen ($why)")
-        Rescue.onNavBlocked(why)
+        Rescue.onNavBlocked()
         finish()
     }
 }

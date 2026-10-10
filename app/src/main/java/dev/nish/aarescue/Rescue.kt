@@ -3,8 +3,10 @@ package dev.nish.aarescue
 import android.Manifest
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Handler
 import android.os.Looper
@@ -31,6 +33,7 @@ object Rescue {
     private const val MUSIC_TICKS = 8
     private const val MUSIC_TICK_MS = 500L
     private const val NAV_CLICK_WINDOW_MS = 25_000L
+    private const val UNLOCK_WAIT_MS = 5 * 60_000L
 
     private val main = Handler(Looper.getMainLooper())
     private lateinit var app: Context
@@ -44,6 +47,27 @@ object Rescue {
         initialized = true
         app = context.applicationContext
         CarConnection(app).type.observeForever { type -> onCarConnection(type) }
+        watchBluetooth()
+    }
+
+    /** BluetoothManager.getConnectedDevices only covers GATT; audio profiles need proxies. */
+    private val btProxies = mutableMapOf<Int, BluetoothProfile>()
+
+    private fun watchBluetooth() {
+        if (app.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) !=
+            PackageManager.PERMISSION_GRANTED
+        ) return
+        val adapter = app.getSystemService(BluetoothManager::class.java)?.adapter ?: return
+        val listener = object : BluetoothProfile.ServiceListener {
+            override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) {
+                btProxies[profile] = proxy
+            }
+            override fun onServiceDisconnected(profile: Int) {
+                btProxies.remove(profile)
+            }
+        }
+        adapter.getProfileProxy(app, listener, BluetoothProfile.A2DP)
+        adapter.getProfileProxy(app, listener, BluetoothProfile.HEADSET)
     }
 
     private fun onCarConnection(type: Int) {
@@ -53,6 +77,7 @@ object Rescue {
         when {
             type == CarConnection.CONNECTION_TYPE_PROJECTION -> {
                 main.removeCallbacksAndMessages(null)
+                stopWaitingForUnlock()
                 navClickDeadline = 0L
                 if (prev != -1) RescueLog.event("Android Auto reconnected")
             }
@@ -72,7 +97,8 @@ object Rescue {
             RescueLog.event("Android Auto dropped — AA Rescue is paused, did nothing")
             return
         }
-        RescueLog.i("DROP test=$test music=$musicPkg navigating=$navigating bt=${connectedBluetooth()}")
+        val screenOn = app.getSystemService(android.os.PowerManager::class.java).isInteractive
+        RescueLog.i("DROP test=$test music=$musicPkg navigating=$navigating screenOn=$screenOn bt=${connectedBluetooth()}")
 
         val doMusic = musicPkg != null && Prefs.resumeMusic(app)
         val doNav = navigating && Prefs.resumeNav(app)
@@ -119,7 +145,8 @@ object Rescue {
 
     private fun resumeNav() {
         if (isProjecting()) return
-        navClickDeadline = SystemClock.elapsedRealtime() + NAV_CLICK_WINDOW_MS
+        navResumeStartedAt = SystemClock.elapsedRealtime()
+        navClickDeadline = navResumeStartedAt + NAV_CLICK_WINDOW_MS
         RescueLog.i("nav: bringing Maps forward, Start-tap armed")
         // WakeActivity turns the screen on, dismisses the keyguard if it can,
         // then opens Maps in its existing state (route preview with Start).
@@ -141,16 +168,46 @@ object Rescue {
         }, NAV_CLICK_WINDOW_MS)
     }
 
+    @Volatile private var navResumeStartedAt = 0L
+
     fun navClickArmed() = SystemClock.elapsedRealtime() < navClickDeadline
 
-    fun onNavStarted(button: String) {
+    /** No Start button needed if Maps is already back in turn-by-turn on its own. */
+    fun navAlreadyRunning() = MediaWatcher.navigatingNowSince(navResumeStartedAt)
+
+    fun onNavStarted(button: String?) {
         navClickDeadline = 0L
-        RescueLog.event("Restarted navigation (tapped $button)")
+        RescueLog.event(
+            if (button != null) "Restarted navigation (tapped $button)" else "Navigation is back on (Maps resumed it)"
+        )
     }
 
-    fun onNavBlocked(why: String) {
+    /**
+     * The phone needs a PIN/fingerprint. Wait (a few minutes) for the user to
+     * unlock, then restore navigation straight away.
+     */
+    fun onNavBlocked() {
         navClickDeadline = 0L
-        RescueLog.event("Couldn't open Maps — phone is locked ($why)")
+        if (waitingForUnlock != null) return
+        RescueLog.event("Phone is locked — will restart navigation as soon as you unlock")
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(c: Context, i: Intent) {
+                stopWaitingForUnlock()
+                if (isProjecting()) return
+                RescueLog.i("nav: unlocked, resuming")
+                resumeNav()
+            }
+        }
+        app.registerReceiver(receiver, IntentFilter(Intent.ACTION_USER_PRESENT))
+        waitingForUnlock = receiver
+        main.postDelayed({ stopWaitingForUnlock() }, UNLOCK_WAIT_MS)
+    }
+
+    private var waitingForUnlock: BroadcastReceiver? = null
+
+    private fun stopWaitingForUnlock() {
+        waitingForUnlock?.let { runCatching { app.unregisterReceiver(it) } }
+        waitingForUnlock = null
     }
 
     private fun label(pkg: String): String = runCatching {
@@ -161,12 +218,11 @@ object Rescue {
     private fun connectedBluetooth(): String {
         if (app.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) !=
             PackageManager.PERMISSION_GRANTED
-        ) return "?"
-        val bm = app.getSystemService(BluetoothManager::class.java) ?: return "?"
-        return listOf(BluetoothProfile.A2DP, BluetoothProfile.HEADSET).flatMap { p ->
-            runCatching { bm.getConnectedDevices(p) }.getOrDefault(emptyList())
+        ) return "no-permission"
+        return btProxies.flatMap { (p, proxy) ->
+            runCatching { proxy.connectedDevices }.getOrDefault(emptyList())
                 .map { "${it.name}(${if (p == BluetoothProfile.A2DP) "a2dp" else "hfp"})" }
-        }.joinToString()
+        }.joinToString().ifEmpty { "none" }
     }
 
     private fun name(t: Int) = when (t) {
