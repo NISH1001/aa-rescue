@@ -56,6 +56,13 @@ class MediaWatcher : NotificationListenerService() {
         callbacks.keys.filter { old -> list.none { it.sessionToken == old.sessionToken } }.forEach {
             it.unregisterCallback(callbacks.remove(it)!!)
         }
+        // A session that disappears while "playing" (e.g. a closed browser tab)
+        // never sends a final state; forget it so it can't shadow the real player.
+        val alive = list.map { it.packageName }.toSet()
+        playingNow.filter { it !in alive }.forEach {
+            playingNow -= it
+            RescueLog.i("media: $it session gone")
+        }
         for (c in list) {
             if (callbacks.keys.any { it.sessionToken == c.sessionToken }) continue
             val cb = object : MediaController.Callback() {
@@ -123,10 +130,14 @@ class MediaWatcher : NotificationListenerService() {
 
         fun isPlaying(pkg: String) = pkg in playingNow
 
-        /** The app that is playing now, or that stopped at/after [since]. */
-        fun musicStoppedByDrop(since: Long): String? =
-            playingNow.firstOrNull()
-                ?: stoppedAt.filter { it.value >= since }.maxByOrNull { it.value }?.key
+        /** Apps whose playback stopped at/after [since], most recent first. */
+        fun stoppedSince(since: Long): List<String> =
+            stoppedAt.filter { it.value >= since && it.key !in playingNow }
+                .entries.sortedByDescending { it.value }.map { it.key }
+
+        fun stoppedAtOrAfter(pkg: String, since: Long) = (stoppedAt[pkg] ?: 0L) >= since
+
+        fun playingPackages(): List<String> = playingNow.toList()
 
         fun playingPackage(): String? = playingNow.firstOrNull()
 

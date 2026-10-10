@@ -81,20 +81,31 @@ object Rescue {
 
     fun onDropped(test: Boolean = false, playingAtTest: String? = null, forceNav: Boolean = false) {
         val now = SystemClock.elapsedRealtime()
-        val musicPkg = if (test) playingAtTest else MediaWatcher.musicStoppedByDrop(now - Timing.MUSIC_GRACE.get(app))
+        // Stopped right around the drop = stopped by the drop.
+        val stopped = if (test) listOfNotNull(playingAtTest)
+        else MediaWatcher.stoppedSince(now - Timing.MUSIC_GRACE.get(app))
+        // Still playing at the drop: the drop's own pause may land a moment later,
+        // so watch these too, but only act if they actually stop.
+        val stillPlaying = if (test) emptyList() else MediaWatcher.playingPackages() - stopped.toSet()
         val navigating = forceNav || MediaWatcher.wasNavigatingSince(now - NAV_GRACE_MS)
+        val screenOn = app.getSystemService(android.os.PowerManager::class.java).isInteractive
         if (!Prefs.enabled(app)) {
             RescueLog.i("DROP ignored: AA Rescue is paused")
             RescueLog.event("Android Auto dropped — AA Rescue is paused, did nothing")
             return
         }
-        val screenOn = app.getSystemService(android.os.PowerManager::class.java).isInteractive
-        RescueLog.i("DROP test=$test music=$musicPkg navigating=$navigating screenOn=$screenOn bt=${connectedBluetooth()}")
+        RescueLog.i(
+            "DROP test=$test stopped=$stopped stillPlaying=$stillPlaying navigating=$navigating " +
+                "screenOn=$screenOn bt=${connectedBluetooth()}"
+        )
 
-        val doMusic = musicPkg != null && Prefs.resumeMusic(app)
+        val doMusic = (stopped.isNotEmpty() || stillPlaying.isNotEmpty()) && Prefs.resumeMusic(app)
         val doNav = navigating && Prefs.resumeNav(app)
         val what = listOfNotNull(
-            musicPkg?.let { "${label(it)} was playing" + if (!doMusic) " (resume is off)" else "" },
+            stopped.takeIf { it.isNotEmpty() }?.let { pkgs ->
+                pkgs.joinToString(" & ") { label(it) } + " was playing" +
+                    if (!Prefs.resumeMusic(app)) " (resume is off)" else ""
+            },
             "a trip was in progress".takeIf { navigating }?.let { it + if (!doNav) " (resume is off)" else "" },
         )
         RescueLog.event(
@@ -102,11 +113,23 @@ object Rescue {
                 what.ifEmpty { listOf("nothing was playing, left as is") }.joinToString(", ")
         )
 
-        // Play almost immediately; if the drop's own "audio unplugged" pause lands
-        // after ours, the retry loop presses play again.
         val react = Timing.REACT.get(app)
-        if (doMusic) main.postDelayed({ resumeMusic(musicPkg!!, attempt = 1) }, react)
+        if (doMusic) {
+            val watch = MusicWatch(stopped.toSet(), stillPlaying.toSet(), droppedAt = now)
+            main.postDelayed({ resumeMusic(watch, attempt = 1) }, react)
+        }
         if (doNav) main.postDelayed({ resumeNav() }, react)
+    }
+
+    /** What to keep playing after a drop, and what we actually had to press play on. */
+    private class MusicWatch(val stopped: Set<String>, val stillPlaying: Set<String>, val droppedAt: Long) {
+        val pressed = linkedSetOf<String>()
+    }
+
+    /** adb only: pause what's playing, then run the real drop logic as if Android Auto dropped. */
+    fun simulateRealDrop(forceNav: Boolean) {
+        MediaWatcher.pauseAll()
+        main.postDelayed({ onDropped(forceNav = forceNav) }, 300)
     }
 
     /** "Test a drop" button: note what's playing *now*, pause it, then run a fake drop. */
@@ -121,18 +144,24 @@ object Rescue {
      * "audio unplugged" pause can land after our first play(), so we keep
      * checking and press play again if it stops.
      */
-    private fun resumeMusic(pkg: String, attempt: Int) {
+    private fun resumeMusic(w: MusicWatch, attempt: Int) {
         if (isProjecting()) return
-        if (!MediaWatcher.isPlaying(pkg)) {
+        for (pkg in w.stopped + w.stillPlaying) {
+            if (MediaWatcher.isPlaying(pkg)) continue
+            // A still-playing app only counts once it has actually stopped since the drop.
+            if (pkg !in w.stopped && !MediaWatcher.stoppedAtOrAfter(pkg, w.droppedAt)) continue
+            w.pressed += pkg
             RescueLog.i("music: play() on $pkg attempt $attempt sent=${MediaWatcher.play(pkg)}")
         }
         if (attempt < Timing.MUSIC_HOLD.get(app) / MUSIC_TICK_MS) {
-            main.postDelayed({ resumeMusic(pkg, attempt + 1) }, MUSIC_TICK_MS)
+            main.postDelayed({ resumeMusic(w, attempt + 1) }, MUSIC_TICK_MS)
             return
         }
-        RescueLog.event(
-            if (MediaWatcher.isPlaying(pkg)) "Resumed ${label(pkg)}" else "Couldn't resume ${label(pkg)}"
-        )
+        for (pkg in w.pressed) {
+            RescueLog.event(
+                if (MediaWatcher.isPlaying(pkg)) "Resumed ${label(pkg)}" else "Couldn't resume ${label(pkg)}"
+            )
+        }
     }
 
     private fun resumeNav() {
@@ -156,6 +185,7 @@ object Rescue {
         main.postDelayed({
             if (navClickDeadline != 0L) {
                 navClickDeadline = 0L
+                RescueLog.i("nav: no Start found; screen: ${MapsClicker.instance?.describeScreen()}")
                 RescueLog.event("Opened Maps but couldn't find Start")
             }
         }, findMs)

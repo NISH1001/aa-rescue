@@ -66,6 +66,23 @@ class MapsClicker : AccessibilityService() {
         return clicked
     }
 
+    /** For the log when Start wasn't found: which app is in front, and Maps' button labels. */
+    fun describeScreen(): String {
+        val root = rootInActiveWindow ?: return "no active window"
+        if (root.packageName != Rescue.MAPS) return "front app is ${root.packageName}"
+        val labels = mutableListOf<String>()
+        fun walk(n: AccessibilityNodeInfo) {
+            if (labels.size >= 15) return
+            if (n.isClickable && n.isVisibleToUser) {
+                (n.text ?: n.contentDescription)?.toString()?.trim()?.take(30)?.takeIf { it.isNotEmpty() }
+                    ?.let { labels += it }
+            }
+            for (i in 0 until n.childCount) n.getChild(i)?.let { walk(it) }
+        }
+        walk(root)
+        return "Maps buttons=$labels"
+    }
+
     private fun find(n: AccessibilityNodeInfo): AccessibilityNodeInfo? {
         val label = (n.text ?: n.contentDescription)?.toString()?.trim()?.lowercase()
         if (label != null && label in labels && n.isVisibleToUser && n.isEnabled) return n

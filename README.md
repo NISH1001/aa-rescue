@@ -29,11 +29,11 @@ to wait for an unlock, etc.) are adjustable under **Timing**.
 ## Install
 
 Download the APK from the [latest release](../../releases/latest) (or
-`release/aa-rescue-0.1.2.apk` in this repo) to the phone and open it (allow installs from that
+`release/aa-rescue-0.1.3.apk` in this repo) to the phone and open it (allow installs from that
 source), or with adb:
 
 ```sh
-adb install -r release/aa-rescue-0.1.2.apk
+adb install -r release/aa-rescue-0.1.3.apk
 ```
 
 Then open AA Rescue and finish Setup:
