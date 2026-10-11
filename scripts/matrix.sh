@@ -1,8 +1,6 @@
 #!/bin/bash
 # Scenario matrix: real Android Auto session (DHU) + real drops, checks real phone state after.
-# Setup: see scripts/e2e.sh. Trips are started on the car screen by tapping the first suggestion
-# and Start; card layouts vary, so if "(could not start trip on car screen)" shows up, start a
-# trip in the DHU window by hand and re-run — an existing connection and trip are reused.
+# Setup and process: docs/INTEGRATION_TESTS.md
 #
 # Usage: scripts/matrix.sh <adb-serial> [s1 s2 s3 s4 s5 s6]
 SERIAL=$1; shift; CASES=${*:-"s1 s2 s3 s4 s5 s6"}

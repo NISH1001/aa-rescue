@@ -118,6 +118,9 @@ class MediaWatcher : NotificationListenerService() {
         }
         navKey = sbn.key
         navLastSeenAt = SystemClock.elapsedRealtime()
+        // Tapping this notification opens Maps straight into the trip. Keep it: after a
+        // drop the notification goes away, but Maps still has the trip and the intent works.
+        sbn.notification.contentIntent?.let { tripIntent = it }
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
@@ -147,6 +150,9 @@ class MediaWatcher : NotificationListenerService() {
         @Volatile private var navKey: String? = null
         @Volatile private var navLastSeenAt = 0L
         @Volatile private var navFirstSeenAt = 0L
+        /** "Open the current trip" action from Maps' trip notification, if one was seen. */
+        @Volatile var tripIntent: android.app.PendingIntent? = null
+            private set
         private val seenMapsKeys = mutableSetOf<String>()
 
         fun isPlaying(pkg: String) = pkg in playingNow

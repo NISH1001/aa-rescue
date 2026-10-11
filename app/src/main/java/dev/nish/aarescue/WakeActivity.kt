@@ -1,8 +1,10 @@
 package dev.nish.aarescue
 
 import android.app.Activity
+import android.app.ActivityOptions
 import android.app.KeyguardManager
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 
 /** Invisible: wakes the screen, gets past the lock screen if allowed, then opens Maps. */
@@ -45,6 +47,24 @@ class WakeActivity : Activity() {
             RescueLog.i("nav: no longer needed, not opening Maps")
             finish()
             return
+        }
+        // Best: Maps' own "open this trip" action, which goes straight back to navigation
+        // even when Maps' phone screen has forgotten the trip (e.g. after a locked drop).
+        MediaWatcher.tripIntent?.let { trip ->
+            val sent = runCatching {
+                val opts = if (Build.VERSION.SDK_INT >= 34) {
+                    ActivityOptions.makeBasic().setPendingIntentBackgroundActivityStartMode(
+                        ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED
+                    ).toBundle()
+                } else null
+                trip.send(this, 0, null, null, null, null, opts)
+            }
+            if (sent.isSuccess) {
+                RescueLog.i("nav: Maps opened via trip notification action")
+                finish()
+                return
+            }
+            RescueLog.i("nav: trip action failed (${sent.exceptionOrNull()?.javaClass?.simpleName}), opening Maps")
         }
         val i = packageManager.getLaunchIntentForPackage(Rescue.MAPS)
         if (i == null) {
