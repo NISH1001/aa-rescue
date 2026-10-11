@@ -11,6 +11,7 @@ class WakeActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        current = this
         setShowWhenLocked(true)
         setTurnScreenOn(true)
         val km = getSystemService(KeyguardManager::class.java)
@@ -33,7 +34,18 @@ class WakeActivity : Activity() {
         })
     }
 
+    override fun onDestroy() {
+        if (current === this) current = null
+        super.onDestroy()
+    }
+
     private fun openMaps() {
+        // Android Auto may have come back (or we gave up) while the lock screen was up.
+        if (!Rescue.navPending) {
+            RescueLog.i("nav: no longer needed, not opening Maps")
+            finish()
+            return
+        }
         val i = packageManager.getLaunchIntentForPackage(Rescue.MAPS)
         if (i == null) {
             fail("Maps not installed")
@@ -49,5 +61,10 @@ class WakeActivity : Activity() {
         RescueLog.i("nav: could not get past lock screen ($why)")
         Rescue.onNavBlocked()
         finish()
+    }
+
+    companion object {
+        @Volatile var current: WakeActivity? = null
+            private set
     }
 }

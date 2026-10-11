@@ -69,6 +69,8 @@ object Rescue {
             type == CarConnection.CONNECTION_TYPE_PROJECTION -> {
                 main.removeCallbacksAndMessages(null)
                 stopWaitingForUnlock()
+                navPending = false
+                WakeActivity.current?.finish()
                 navClickDeadline = 0L
                 if (prev != -1) RescueLog.event("Android Auto reconnected")
             }
@@ -157,6 +159,11 @@ object Rescue {
             main.postDelayed({ resumeMusic(w, attempt + 1) }, MUSIC_TICK_MS)
             return
         }
+        // Give the last play() a moment to take effect before judging.
+        main.postDelayed({ reportMusic(w) }, MUSIC_TICK_MS)
+    }
+
+    private fun reportMusic(w: MusicWatch) {
         for (pkg in w.pressed) {
             RescueLog.event(
                 if (MediaWatcher.isPlaying(pkg)) "Resumed ${label(pkg)}" else "Couldn't resume ${label(pkg)}"
@@ -166,6 +173,7 @@ object Rescue {
 
     private fun resumeNav() {
         if (isProjecting()) return
+        navPending = true
         navResumeStartedAt = SystemClock.elapsedRealtime()
         val findMs = Timing.NAV_FIND.get(app)
         navClickDeadline = navResumeStartedAt + findMs
@@ -185,6 +193,7 @@ object Rescue {
         main.postDelayed({
             if (navClickDeadline != 0L) {
                 navClickDeadline = 0L
+                navPending = false
                 RescueLog.i("nav: no Start found; screen: ${MapsClicker.instance?.describeScreen()}")
                 RescueLog.event("Opened Maps but couldn't find Start")
             }
@@ -193,6 +202,10 @@ object Rescue {
 
     @Volatile private var navResumeStartedAt = 0L
 
+    /** True from a drop until navigation is restored, given up on, or Android Auto is back. */
+    @Volatile var navPending = false
+        private set
+
     fun navClickArmed() = SystemClock.elapsedRealtime() < navClickDeadline
 
     /** No Start button needed if Maps is already back in turn-by-turn on its own. */
@@ -200,6 +213,7 @@ object Rescue {
 
     fun onNavStarted(button: String?) {
         navClickDeadline = 0L
+        navPending = false
         RescueLog.event(
             if (button != null) "Restarted navigation (tapped $button)" else "Navigation is back on (Maps resumed it)"
         )
@@ -211,8 +225,9 @@ object Rescue {
      */
     fun onNavBlocked() {
         navClickDeadline = 0L
-        if (waitingForUnlock != null) return
+        if (!navPending || isProjecting() || waitingForUnlock != null) return
         if (Timing.UNLOCK_WAIT.get(app) == 0L) {
+            navPending = false
             RescueLog.event("Couldn't open Maps — phone is locked")
             return
         }
@@ -227,7 +242,7 @@ object Rescue {
         }
         app.registerReceiver(receiver, IntentFilter(Intent.ACTION_USER_PRESENT))
         waitingForUnlock = receiver
-        main.postDelayed({ stopWaitingForUnlock() }, Timing.UNLOCK_WAIT.get(app))
+        main.postDelayed({ stopWaitingForUnlock(); navPending = false }, Timing.UNLOCK_WAIT.get(app))
     }
 
     private var waitingForUnlock: BroadcastReceiver? = null

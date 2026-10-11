@@ -29,11 +29,11 @@ to wait for an unlock, etc.) are adjustable under **Timing**.
 ## Install
 
 Download the APK from the [latest release](../../releases/latest) (or
-`release/aa-rescue-0.1.4.apk` in this repo) to the phone and open it (allow installs from that
+`release/aa-rescue-0.1.5.apk` in this repo) to the phone and open it (allow installs from that
 source), or with adb:
 
 ```sh
-adb install -r release/aa-rescue-0.1.4.apk
+adb install -r release/aa-rescue-0.1.5.apk
 ```
 
 Then open AA Rescue and finish Setup:
@@ -65,6 +65,13 @@ see the header of `scripts/e2e.sh` for setup:
 ```sh
 scripts/e2e.sh <adb-serial> music_nav   # music + navigation must come back after the drop
 scripts/e2e.sh <adb-serial> nothing     # nothing playing → nothing gets started
+```
+
+Scenario matrix (no trip / trip, music on / off, another app in front, instant reconnect,
+back-to-back drops), checking the phone's real state after each drop:
+
+```sh
+scripts/matrix.sh <adb-serial>           # all of s1..s6
 ```
 
 Fake a drop for testing (adb only):

@@ -49,7 +49,9 @@ class MediaWatcher : NotificationListenerService() {
 
     /** `adb shell dumpsys activity service dev.nish.aarescue/.MediaWatcher` prints the trace log. */
     override fun dump(fd: java.io.FileDescriptor?, writer: java.io.PrintWriter, args: Array<out String>?) {
-        writer.print(RescueLog.readTrace())
+        // First line: live state, for scripts/e2e.sh. Then the trace log.
+        writer.println("STATE projecting=${Rescue.isProjecting()} trip=${navKey != null} playing=${playingNow.sorted()}")
+        if (args?.contains("state") != true) writer.print(RescueLog.readTrace())
     }
 
     private fun track(list: List<MediaController>) {
@@ -96,7 +98,15 @@ class MediaWatcher : NotificationListenerService() {
         if (seenMapsKeys.add(sbn.key)) {
             RescueLog.i("maps notification: category=${sbn.notification.category} ongoing=${sbn.isOngoing}")
         }
-        if (!isNavNotification(sbn.notification)) return
+        if (!isNavNotification(sbn.notification)) {
+            // Same notification slot flipping back to a non-trip state ends the trip.
+            if (sbn.key == navKey) {
+                RescueLog.i("nav notification no longer a trip")
+                navKey = null
+                navLastSeenAt = SystemClock.elapsedRealtime()
+            }
+            return
+        }
         if (navKey == null) {
             navFirstSeenAt = SystemClock.elapsedRealtime()
             val e = sbn.notification.extras
@@ -117,7 +127,16 @@ class MediaWatcher : NotificationListenerService() {
         navLastSeenAt = SystemClock.elapsedRealtime()
     }
 
-    private fun isNavNotification(n: Notification) = n.category == Notification.CATEGORY_NAVIGATION
+    /**
+     * A trip in progress. While Android Auto is connected, Maps keeps a plain
+     * "Driving with Google Maps" navigation-category notification up even with
+     * no trip; a real trip has turn-by-turn content with an action (Exit
+     * navigation) in a progress layout.
+     */
+    private fun isNavNotification(n: Notification) =
+        n.category == Notification.CATEGORY_NAVIGATION &&
+            (!n.actions.isNullOrEmpty() ||
+                n.extras.getString(Notification.EXTRA_TEMPLATE)?.endsWith("ProgressStyle") == true)
 
     companion object {
         @Volatile var instance: MediaWatcher? = null
