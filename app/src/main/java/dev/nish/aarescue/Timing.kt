@@ -36,6 +36,11 @@ enum class Timing(
         "t_unlock_wait", "Wait for unlock",
         "If the phone is locked, resume navigation when you unlock within this time",
         5 * 60_000, 0, 15 * 60_000, 60_000,
+    ),
+    AUTOPLAY(
+        "t_autoplay", "Auto-start window",
+        "Music that starts this soon after Android Auto connects counts as auto-started",
+        6_000, 2_000, 20_000, 1_000,
     );
 
     fun get(c: Context): Long = sp(c).getLong(key, defaultMs).coerceIn(minMs, maxMs)

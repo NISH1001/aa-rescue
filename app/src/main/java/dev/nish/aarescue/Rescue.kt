@@ -18,6 +18,10 @@ import androidx.car.app.connection.CarConnection
  * things back the way they were: music that was playing plays again, and a
  * trip that was in progress gets restarted in Google Maps. Nothing that was
  * off gets turned on.
+ *
+ * It also watches the start of a session: Android Auto's "Start music
+ * automatically" presses play on connect, and with no speaker or headphones
+ * connected that comes out of the phone itself. That gets paused again.
  */
 object Rescue {
     const val MAPS = "com.google.android.apps.maps"
@@ -25,6 +29,10 @@ object Rescue {
     /** Maps may pull its trip notification just before the drop is reported. */
     private const val NAV_GRACE_MS = 5_000L
     private const val MUSIC_TICK_MS = 500L
+    /** Android Auto's autoplay can land just before the connection is reported. */
+    private const val AUTOPLAY_LOOKBACK_MS = 1_500L
+    /** Reconnecting this soon after a drop that had music: it's the same drive, leave music alone. */
+    private const val SAME_DRIVE_MS = 120_000L
 
     private val main = Handler(Looper.getMainLooper())
     private lateinit var app: Context
@@ -73,10 +81,97 @@ object Rescue {
                 WakeActivity.current?.finish()
                 navClickDeadline = 0L
                 if (prev != -1) RescueLog.event("Android Auto reconnected")
+                // prev == -1 is this process starting mid-session, not a new connection.
+                if (prev == CarConnection.CONNECTION_TYPE_NOT_CONNECTED) onConnected()
             }
             prev == CarConnection.CONNECTION_TYPE_PROJECTION &&
-                type == CarConnection.CONNECTION_TYPE_NOT_CONNECTED -> onDropped()
+                type == CarConnection.CONNECTION_TYPE_NOT_CONNECTED -> {
+                connectedAt = 0L
+                onDropped()
+            }
         }
+    }
+
+    /** When the current session connected; 0 when not connected. */
+    private var connectedAt = 0L
+    private var lastMusicDropAt = 0L
+    /** Apps paused by [onPlaybackStarted] that haven't played since; a drop must not resume them. */
+    private val autoPaused = mutableSetOf<String>()
+
+    fun onConnected() {
+        val now = SystemClock.elapsedRealtime()
+        connectedAt = now
+        autoPaused.clear()
+        RescueLog.i("CONNECT outputs=${audioOutputs()} playing=${MediaWatcher.playingPackages()}")
+        MediaWatcher.startedSince(now - AUTOPLAY_LOOKBACK_MS).forEach { onPlaybackStarted(it) }
+    }
+
+    /**
+     * An app just started playing. Right after Android Auto connects that's its
+     * autoplay, not the user; if the sound has nowhere to go but the phone's
+     * own speaker, pause it.
+     */
+    fun onPlaybackStarted(pkg: String) {
+        if (!initialized || connectedAt == 0L) {
+            autoPaused -= pkg
+            return
+        }
+        val now = SystemClock.elapsedRealtime()
+        if (now - connectedAt > Timing.AUTOPLAY.get(app)) {
+            autoPaused -= pkg
+            return
+        }
+        if (!Prefs.enabled(app) || !Prefs.stopAutoplay(app)) return
+        if (lastMusicDropAt != 0L && connectedAt - lastMusicDropAt < SAME_DRIVE_MS) {
+            RescueLog.i("autoplay: $pkg left playing, music was on at a drop moments ago")
+            return
+        }
+        val external = externalOutputs()
+        if (external.isNotEmpty()) {
+            RescueLog.i("autoplay: $pkg left playing, output available: $external")
+            return
+        }
+        RescueLog.i("autoplay: pausing $pkg ${now - connectedAt} ms after connect, outputs=${audioOutputs()}")
+        MediaWatcher.pause(pkg)
+        if (autoPaused.add(pkg)) {
+            RescueLog.event("Stopped ${label(pkg)} — it started by itself with no speaker connected")
+        }
+    }
+
+    /** adb only: pretend Android Auto just connected, to try the autoplay stop without a car. */
+    fun simulateConnect() {
+        lastMusicDropAt = 0L
+        onConnected()
+    }
+
+    private fun outputDevices() =
+        app.getSystemService(android.media.AudioManager::class.java)
+            .getDevices(android.media.AudioManager.GET_DEVICES_OUTPUTS)
+
+    private fun audioOutputs() = outputDevices().map { "${it.type}:${it.productName}" }
+
+    /** Somewhere other than the phone itself that media could play: speakers, headphones, the car screen. */
+    private fun externalOutputs() = outputDevices().filter { it.type in EXTERNAL_OUTPUTS }.map { "${it.productName}" }
+
+    private val EXTERNAL_OUTPUTS = run {
+        setOf(
+            android.media.AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
+            android.media.AudioDeviceInfo.TYPE_BLE_HEADSET,
+            android.media.AudioDeviceInfo.TYPE_BLE_SPEAKER,
+            android.media.AudioDeviceInfo.TYPE_BLE_BROADCAST,
+            android.media.AudioDeviceInfo.TYPE_HEARING_AID,
+            android.media.AudioDeviceInfo.TYPE_WIRED_HEADSET,
+            android.media.AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
+            android.media.AudioDeviceInfo.TYPE_USB_HEADSET,
+            android.media.AudioDeviceInfo.TYPE_USB_DEVICE,
+            android.media.AudioDeviceInfo.TYPE_LINE_ANALOG,
+            android.media.AudioDeviceInfo.TYPE_LINE_DIGITAL,
+            android.media.AudioDeviceInfo.TYPE_AUX_LINE,
+            android.media.AudioDeviceInfo.TYPE_HDMI,
+            android.media.AudioDeviceInfo.TYPE_DOCK,
+            // Android Auto capturing media to play it through the car screen.
+            android.media.AudioDeviceInfo.TYPE_REMOTE_SUBMIX,
+        )
     }
 
     fun isProjecting() = lastType == CarConnection.CONNECTION_TYPE_PROJECTION
@@ -84,13 +179,15 @@ object Rescue {
     fun onDropped(test: Boolean = false, playingAtTest: String? = null, forceNav: Boolean = false) {
         val now = SystemClock.elapsedRealtime()
         // Stopped right around the drop = stopped by the drop.
+        // (Not what we paused ourselves at connect: that was never meant to play.)
         val stopped = if (test) listOfNotNull(playingAtTest)
-        else MediaWatcher.stoppedSince(now - Timing.MUSIC_GRACE.get(app))
+        else MediaWatcher.stoppedSince(now - Timing.MUSIC_GRACE.get(app)) - autoPaused
         // Still playing at the drop: the drop's own pause may land a moment later,
         // so watch these too, but only act if they actually stop.
         val stillPlaying = if (test) emptyList() else MediaWatcher.playingPackages() - stopped.toSet()
         val navigating = forceNav || MediaWatcher.wasNavigatingSince(now - NAV_GRACE_MS)
         val screenOn = app.getSystemService(android.os.PowerManager::class.java).isInteractive
+        if (!test && (stopped.isNotEmpty() || stillPlaying.isNotEmpty())) lastMusicDropAt = now
         if (!Prefs.enabled(app)) {
             RescueLog.i("DROP ignored: AA Rescue is paused")
             RescueLog.event("Android Auto dropped — AA Rescue is paused, did nothing")

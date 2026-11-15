@@ -86,6 +86,10 @@ class MediaWatcher : NotificationListenerService() {
         // can be told apart from one the user made earlier.
         if (was && !playing) stoppedAt[pkg] = SystemClock.elapsedRealtime()
         if (playing != was) RescueLog.i("media: $pkg ${if (playing) "playing" else "stopped (${state?.state})"}")
+        if (playing && !was) {
+            startedAt[pkg] = SystemClock.elapsedRealtime()
+            Rescue.onPlaybackStarted(pkg)
+        }
     }
 
     private fun controllerFor(pkg: String): MediaController? =
@@ -147,6 +151,7 @@ class MediaWatcher : NotificationListenerService() {
 
         private val playingNow = mutableSetOf<String>()
         private val stoppedAt = mutableMapOf<String, Long>()
+        private val startedAt = mutableMapOf<String, Long>()
         @Volatile private var navKey: String? = null
         @Volatile private var navLastSeenAt = 0L
         @Volatile private var navFirstSeenAt = 0L
@@ -161,6 +166,14 @@ class MediaWatcher : NotificationListenerService() {
         fun stoppedSince(since: Long): List<String> =
             stoppedAt.filter { it.value >= since && it.key !in playingNow }
                 .entries.sortedByDescending { it.value }.map { it.key }
+
+        /** Apps playing now that started at/after [since]. */
+        fun startedSince(since: Long): List<String> =
+            playingNow.filter { (startedAt[it] ?: 0L) >= since }
+
+        fun pause(pkg: String) {
+            instance?.controllerFor(pkg)?.transportControls?.pause()
+        }
 
         fun stoppedAtOrAfter(pkg: String, since: Long) = (stoppedAt[pkg] ?: 0L) >= since
 

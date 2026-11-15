@@ -62,6 +62,7 @@ private fun Home() {
     var state by remember { mutableStateOf(read()) }
     var music by remember { mutableStateOf(Prefs.resumeMusic(ctx)) }
     var nav by remember { mutableStateOf(Prefs.resumeNav(ctx)) }
+    var autoplay by remember { mutableStateOf(Prefs.stopAutoplay(ctx)) }
     var enabled by remember { mutableStateOf(Prefs.enabled(ctx)) }
     var showInfo by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
@@ -105,6 +106,13 @@ private fun Home() {
             ToggleRow(Icons.Outlined.Navigation, "Resume navigation", "Only during an active trip", nav, enabled) {
                 nav = it; Prefs.setResumeNav(ctx, it)
             }
+        }
+
+        Section("When Android Auto connects") {
+            ToggleRow(
+                Icons.Outlined.VolumeOff, "Stop auto-started music",
+                "Only if no speaker or headphones are connected", autoplay, enabled,
+            ) { autoplay = it; Prefs.setStopAutoplay(ctx, it) }
         }
 
         TimingSection(enabled)

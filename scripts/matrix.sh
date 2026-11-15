@@ -20,7 +20,9 @@ dhu_up(){
   pkill -f desktop-head-unit; pkill -f "tail -f $S/dhu.in"; sleep 1
   a forward tcp:5277 tcp:5277 >/dev/null; rm -f "$S/dhu.in"; mkfifo "$S/dhu.in"
   (cd "$DHU_DIR" && nohup sh -c "tail -f $S/dhu.in | ./desktop-head-unit -a" > "$S/dhu.log" 2>&1 &)
-  for i in $(seq 1 20); do sleep 2; state | grep -q "projecting=true" && return 0; done
+  # After a fresh connect, wait out the auto-start window (Timing → Auto-start window, 6 s):
+  # music started inside it with no speaker connected is paused again, by design.
+  for i in $(seq 1 20); do sleep 2; state | grep -q "projecting=true" && { sleep 8; return 0; }; done
   log "DHU did not connect"; return 1
 }
 dhu_down(){ pkill -f desktop-head-unit; pkill -f "tail -f $S/dhu.in"; }

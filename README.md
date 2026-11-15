@@ -6,6 +6,11 @@ Google Maps falls out of navigation. AA Rescue notices the drop and puts things 
 - **Music** — presses play again, but only if it was playing when the screen dropped.
 - **Navigation** — brings Google Maps forward and taps **Start**, but only during an active trip.
 
+It also handles the start of a drive: Android Auto's "Start music automatically" presses
+play when it connects, and with no speaker or headphones connected that comes out of the
+phone's own speaker. AA Rescue pauses it again (**Stop auto-started music**). With a
+Bluetooth speaker, headphones or a wired output connected, autoplay is left alone.
+
 Nothing that was off gets turned on. Both behaviors can be toggled, and the switch at
 the top pauses everything. Timings (reaction delay, how long to keep music playing, how long
 to wait for an unlock, etc.) are adjustable under **Timing**.
@@ -29,11 +34,11 @@ to wait for an unlock, etc.) are adjustable under **Timing**.
 ## Install
 
 Download the APK from the [latest release](../../releases/latest) (or
-`release/aa-rescue-0.1.6.apk` in this repo) to the phone and open it (allow installs from that
+`release/aa-rescue-0.1.7.apk` in this repo) to the phone and open it (allow installs from that
 source), or with adb:
 
 ```sh
-adb install -r release/aa-rescue-0.1.6.apk
+adb install -r release/aa-rescue-0.1.7.apk
 ```
 
 Then open AA Rescue and finish Setup:
@@ -46,6 +51,8 @@ Tip: if your phone has a PIN, add the car screen's Bluetooth (or your speaker) u
 Extend Unlock → Trusted devices, so Maps can be opened after a drop.
 
 The APK is signed with a debug key (personal sideload build, not for the Play Store).
+0.1.7 is signed with a different debug key than 0.1.6 and earlier, so it can't update those
+in place: uninstall the old version first, then redo Setup.
 
 ## Build
 
@@ -79,4 +86,11 @@ Fake a drop for testing (adb only):
 
 ```sh
 adb shell am broadcast -n dev.nish.aarescue/.DebugDropReceiver --ez nav true
+```
+
+Fake a connection (adb only), then start music within the auto-start window to see it
+paused when no speaker is connected:
+
+```sh
+adb shell am broadcast -n dev.nish.aarescue/.DebugDropReceiver --ez connect true
 ```

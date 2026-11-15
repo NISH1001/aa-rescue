@@ -53,6 +53,9 @@ which app is in front), not just the app's own log.
   the first suggestion and then Start on the DHU screen (800×480). Card layouts vary, so
   if it prints `(could not start trip on car screen)`, start a trip in the DHU window by
   hand and re-run. An existing connection and trip are reused.
+- **Music started right after connecting gets paused.** With *Stop auto-started music* on and
+  no speaker connected, playback that starts inside the auto-start window (6 s) is paused.
+  `matrix.sh` waits 8 s after a fresh connect for that reason.
 - **Don't force-stop AA Rescue** during testing. Android turns off an app's
   Accessibility permission when it's force-stopped. Reinstalling (`adb install -r`) is fine.
 
@@ -93,6 +96,25 @@ S7 and S8 are manual because they need a fingerprint/PIN unlock. Steps:
    `adb shell dumpsys activity service dev.nish.aarescue/.MediaWatcher`.
 
 ## Results
+
+**v0.1.7** · 2026-11-15 · Pixel 9, DHU 2.1 over wireless adb
+
+S1–S6 re-run after adding *Stop auto-started music*: **19/19 automated checks**. S3/S4 were
+re-run once after the script failed to start a trip on the car screen. S7/S8 (manual) were
+not re-run on this build.
+
+Auto-started music, checked on the same build:
+
+| Case | Expected | Result |
+|---|---|---|
+| Fake connect (`--ez connect true`), music starts 1.6 s later, phone speaker only | Paused | ✅ |
+| Fake connect, music starts 9 s later (outside the 6 s window) | Left playing | ✅ |
+| Fake connect, music already playing | Left playing | ✅ |
+| Real DHU connect, autoplay, car screen takes the audio (`remote-submix` output) | Left playing | ✅ |
+| Real DHU reconnect within 2 min of a drop that had music | Left playing | ✅ |
+
+Not covered: a Bluetooth speaker connected at connect time, and a real head unit that
+leaves the audio on the phone.
 
 **v0.1.6** · 2026-10-10 · Pixel 9, Android 17, Android Auto 17.7, Google Maps 26.40,
 YouTube Music 9.40, DHU 2.1 over wireless adb

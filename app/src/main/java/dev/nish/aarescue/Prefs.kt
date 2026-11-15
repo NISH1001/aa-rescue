@@ -13,4 +13,7 @@ object Prefs {
 
     fun resumeNav(c: Context) = sp(c).getBoolean("resume_nav", true)
     fun setResumeNav(c: Context, on: Boolean) = sp(c).edit().putBoolean("resume_nav", on).apply()
+
+    fun stopAutoplay(c: Context) = sp(c).getBoolean("stop_autoplay", true)
+    fun setStopAutoplay(c: Context, on: Boolean) = sp(c).edit().putBoolean("stop_autoplay", on).apply()
 }
