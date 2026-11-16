@@ -5,7 +5,7 @@ with it: Android pauses the music and Google Maps falls out of turn-by-turn. AA 
 runs in the background, notices, and puts things back. Nothing that was off gets turned on.
 
 <p align="center">
-  <img src="docs/main.png" width="250" alt="Main screen: the four toggles and the test button">
+  <img src="docs/main-0.1.8.png" width="250" alt="Main screen: the four toggles and the test button">
   &nbsp;
   <img src="docs/recent.png" width="250" alt="Recent: what happened at each drop">
   &nbsp;
