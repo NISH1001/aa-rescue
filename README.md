@@ -1,31 +1,44 @@
 # AA Rescue
 
-When a wireless Android Auto screen drops mid-drive, Android pauses your music and
-Google Maps falls out of navigation. AA Rescue notices the drop and puts things back:
-
-- **Music** — presses play again, but only if it was playing when the screen dropped.
-- **Navigation** — brings Google Maps forward and taps **Start**, but only during an active trip.
-
-It also handles the start of a drive: Android Auto's "Start music automatically" presses
-play when it connects, and with no speaker or headphones connected that comes out of the
-phone's own speaker. AA Rescue pauses it again (**Stop auto-started music**). With a
-Bluetooth speaker, headphones or a wired output connected, autoplay is left alone.
-
-A disconnect looks the same whether the screen glitched or you switched the car off, so
-AA Rescue checks the car's speed (**Wait until the car moves**): moving at the drop means
-rescue right away; stopped means wait, and rescue only if the car drives on within a few
-minutes. A car that was switched off never moves again, so nothing starts playing and Maps
-doesn't pop up.
-
-Nothing that was off gets turned on. Both behaviors can be toggled, and the switch at
-the top pauses everything. Timings (reaction delay, how long to keep music playing, how long
-to wait for an unlock, etc.) are adjustable under **Timing**.
+A wireless Android Auto screen that drops mid-drive takes your music and your navigation
+with it: Android pauses the music and Google Maps falls out of turn-by-turn. AA Rescue
+runs in the background, notices, and puts things back. Nothing that was off gets turned on.
 
 <p align="center">
-  <img src="docs/main.png" width="280" alt="Main screen: toggles, test button, recent drops">
-  &nbsp;&nbsp;
-  <img src="docs/info.png" width="280" alt="Info sheet: pausing vs. turning off">
+  <img src="docs/main.png" width="250" alt="Main screen: the four toggles and the test button">
+  &nbsp;
+  <img src="docs/recent.png" width="250" alt="Recent: what happened at each drop">
+  &nbsp;
+  <img src="docs/timing.png" width="250" alt="Timing: adjustable delays and the moving threshold">
 </p>
+
+## What it does
+
+**When Android Auto drops**
+
+| Rescue | What happens | Only if |
+|---|---|---|
+| **Resume music** | Presses play again on the app that was playing, and keeps it playing if Android pauses it late. Sound comes out wherever it was going: your Bluetooth speaker or headphones if connected, otherwise the phone. | It was playing when the screen dropped |
+| **Resume navigation** | Brings Google Maps to the front on the phone and taps **Start** / **Restart**, so turn-by-turn carries on even if the car screen never comes back. If the phone is locked, it does this as soon as you unlock. | A trip was in progress |
+| **Wait until the car moves** | Tells a glitch from the car being switched off. Moving at the drop: rescue right away. Stopped (red light, or you turned the car off): wait, and rescue only if the car drives on within 5 minutes. A switched-off car never moves again, so nothing starts playing and Maps doesn't pop up. | Location is allowed; otherwise every drop is rescued right away |
+
+If Android Auto reconnects by itself, AA Rescue stands down and leaves the session alone.
+
+**When Android Auto connects**
+
+| Rescue | What happens | Only if |
+|---|---|---|
+| **Stop auto-started music** | Android Auto's "Start music automatically" presses play on connect. On a screen that leaves the sound on the phone, that plays from the phone's own speaker; AA Rescue pauses it again. | No Bluetooth speaker, headphones, wired output or car-screen audio is available. Music you were already playing is left alone |
+
+**Controls**
+
+- Each rescue has its own toggle, and the switch at the top pauses all of them
+  ([pausing vs. turning off completely](docs/info.png)).
+- **Timing** adjusts the delays: reaction delay, how long to keep music playing, how long to
+  look for Start in Maps, how long to wait for an unlock or for the car to move, the
+  auto-start window, and the speed that counts as moving (15 km/h by default).
+- **Recent** shows, in plain words, what happened at each drop and what was done about it.
+- **Test a drop** fakes a drop so you can see music come back without a car.
 
 ## Privacy
 
