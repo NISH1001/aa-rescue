@@ -11,6 +11,12 @@ play when it connects, and with no speaker or headphones connected that comes ou
 phone's own speaker. AA Rescue pauses it again (**Stop auto-started music**). With a
 Bluetooth speaker, headphones or a wired output connected, autoplay is left alone.
 
+A disconnect looks the same whether the screen glitched or you switched the car off, so
+AA Rescue checks the car's speed (**Wait until the car moves**): moving at the drop means
+rescue right away; stopped means wait, and rescue only if the car drives on within a few
+minutes. A car that was switched off never moves again, so nothing starts playing and Maps
+doesn't pop up.
+
 Nothing that was off gets turned on. Both behaviors can be toggled, and the switch at
 the top pauses everything. Timings (reaction delay, how long to keep music playing, how long
 to wait for an unlock, etc.) are adjustable under **Timing**.
@@ -28,17 +34,21 @@ to wait for an unlock, etc.) are adjustable under **Timing**.
   (`res/xml/maps_clicker.xml`), only reads the screen while Maps is the app in front,
   and only acts for ~25 seconds after a drop, looking for a "Start"/"Resume" button.
   Android shows its generic "full control" warning for every accessibility app regardless.
+- **Location (Allow all the time)** is used for one thing: the car's speed, read only from
+  the moment Android Auto connects until a drop has been dealt with. Positions aren't stored
+  or logged. Without it (or with *Wait until the car moves* off) every drop is rescued
+  right away, as in earlier versions.
 - **Notification access** is used to press play on the music app and to see whether
   Maps has an active trip notification.
 
 ## Install
 
 Download the APK from the [latest release](../../releases/latest) (or
-`release/aa-rescue-0.1.7.apk` in this repo) to the phone and open it (allow installs from that
+`release/aa-rescue-0.1.8.apk` in this repo) to the phone and open it (allow installs from that
 source), or with adb:
 
 ```sh
-adb install -r release/aa-rescue-0.1.7.apk
+adb install -r release/aa-rescue-0.1.8.apk
 ```
 
 Then open AA Rescue and finish Setup:
@@ -47,12 +57,14 @@ Then open AA Rescue and finish Setup:
 2. **Maps auto-Start** — Accessibility → AA Rescue → on. If it's greyed out:
    App info → ⋮ → *Allow restricted settings*, then try again.
 
+3. **Car movement** — Location → Precise, then *Allow all the time* (tap **Turn on** twice).
+
 Tip: if your phone has a PIN, add the car screen's Bluetooth (or your speaker) under
 Extend Unlock → Trusted devices, so Maps can be opened after a drop.
 
 The APK is signed with a debug key (personal sideload build, not for the Play Store).
-0.1.7 is signed with a different debug key than 0.1.6 and earlier, so it can't update those
-in place: uninstall the old version first, then redo Setup.
+0.1.7 and later are signed with a different debug key than 0.1.6 and earlier, so they can't
+update those in place: uninstall the old version first, then redo Setup.
 
 ## Build
 
@@ -79,13 +91,21 @@ Scenario matrix (no trip / trip, music on / off, another app in front, instant r
 back-to-back drops), checking the phone's real state after each drop:
 
 ```sh
-scripts/matrix.sh <adb-serial>           # all of s1..s6
+scripts/matrix.sh <adb-serial>           # s1..s6, s9, s10
 ```
 
 Fake a drop for testing (adb only):
 
 ```sh
 adb shell am broadcast -n dev.nish.aarescue/.DebugDropReceiver --ez nav true
+```
+
+Fake the car's speed in km/h (adb only; negative goes back to GPS). At 0 a drop waits, and
+raising it releases the rescue:
+
+```sh
+adb shell am broadcast -n dev.nish.aarescue/.DebugDropReceiver --ef speed 0
+adb shell am broadcast -n dev.nish.aarescue/.DebugDropReceiver --ef speed 30
 ```
 
 Fake a connection (adb only), then start music within the auto-start window to see it

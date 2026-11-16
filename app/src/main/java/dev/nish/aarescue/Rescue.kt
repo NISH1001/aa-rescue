@@ -45,6 +45,7 @@ object Rescue {
         if (initialized) return
         initialized = true
         app = context.applicationContext
+        Motion.init(app)
         CarConnection(app).type.observeForever { type -> onCarConnection(type) }
         watchBluetooth()
     }
@@ -76,6 +77,9 @@ object Rescue {
         when {
             type == CarConnection.CONNECTION_TYPE_PROJECTION -> {
                 main.removeCallbacksAndMessages(null)
+                pendingRescue = null
+                Motion.onMoving = null
+                Motion.start()
                 stopWaitingForUnlock()
                 navPending = false
                 WakeActivity.current?.finish()
@@ -141,6 +145,7 @@ object Rescue {
     /** adb only: pretend Android Auto just connected, to try the autoplay stop without a car. */
     fun simulateConnect() {
         lastMusicDropAt = 0L
+        Motion.start()
         onConnected()
     }
 
@@ -191,6 +196,7 @@ object Rescue {
         if (!Prefs.enabled(app)) {
             RescueLog.i("DROP ignored: AA Rescue is paused")
             RescueLog.event("Android Auto dropped — AA Rescue is paused, did nothing")
+            Motion.stop()
             return
         }
         RescueLog.i(
@@ -212,13 +218,47 @@ object Rescue {
                 what.ifEmpty { listOf("nothing was playing, left as is") }.joinToString(", ")
         )
 
-        val react = Timing.REACT.get(app)
-        if (doMusic) {
-            val watch = MusicWatch(stopped.toSet(), stillPlaying.toSet(), droppedAt = now)
-            main.postDelayed({ resumeMusic(watch, attempt = 1) }, react)
+        if (!doMusic && !doNav) {
+            Motion.stop()
+            return
         }
-        if (doNav) main.postDelayed({ resumeNav() }, react)
+        val watch = if (doMusic) MusicWatch(stopped.toSet(), stillPlaying.toSet(), droppedAt = now) else null
+        val rescue = Runnable {
+            if (watch != null) resumeMusic(watch, attempt = 1)
+            if (doNav) resumeNav()
+        }
+        // Stopped at the drop: a red light and a switched-off car look the same.
+        // Wait; only a car that drives on gets its music and map back.
+        val wait = !test && Prefs.waitForMoving(app) && Motion.usable() && !Motion.moving()
+        RescueLog.i("motion: ${Motion.describe()} usable=${Motion.usable()} wait=$wait")
+        if (!wait) {
+            Motion.stop()
+            main.postDelayed(rescue, Timing.REACT.get(app))
+            return
+        }
+        RescueLog.event("Car is stopped — will bring it back when the car moves")
+        pendingRescue = rescue
+        Motion.onMoving = {
+            pendingRescue?.let {
+                pendingRescue = null
+                Motion.stop()
+                RescueLog.event("Car is moving again")
+                it.run()
+            }
+        }
+        main.postDelayed({
+            if (pendingRescue != null) {
+                pendingRescue = null
+                Motion.stop()
+                RescueLog.event("Car didn't move — left as is")
+            }
+        }, Timing.MOVE_WAIT.get(app))
     }
+
+    /** What to do once the car moves, after a drop while stopped. */
+    private var pendingRescue: Runnable? = null
+
+    fun waitingForMove() = pendingRescue != null
 
     /** What to keep playing after a drop, and what we actually had to press play on. */
     private class MusicWatch(val stopped: Set<String>, val stillPlaying: Set<String>, val droppedAt: Long) {

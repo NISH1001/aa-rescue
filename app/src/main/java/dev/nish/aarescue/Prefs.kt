@@ -16,4 +16,7 @@ object Prefs {
 
     fun stopAutoplay(c: Context) = sp(c).getBoolean("stop_autoplay", true)
     fun setStopAutoplay(c: Context, on: Boolean) = sp(c).edit().putBoolean("stop_autoplay", on).apply()
+
+    fun waitForMoving(c: Context) = sp(c).getBoolean("wait_for_moving", true)
+    fun setWaitForMoving(c: Context, on: Boolean) = sp(c).edit().putBoolean("wait_for_moving", on).apply()
 }

@@ -62,7 +62,7 @@ which app is in front), not just the app's own log.
 ## Running
 
 ```sh
-scripts/matrix.sh <adb-serial>            # S1–S6
+scripts/matrix.sh <adb-serial>            # S1–S6, S9, S10
 scripts/matrix.sh <adb-serial> s3 s4      # selected scenarios
 scripts/e2e.sh <adb-serial> music_nav     # single drop + reconnect, prints the trace
 ```
@@ -85,6 +85,11 @@ Order matters a little. S1/S2 need **no** trip on the car (the script ends one b
 | S6 | Trip + music, **two drops in a row** | Both drops: music resumes, trip running |
 | S7 | Trip + music, **phone locked (PIN)**, stays disconnected | Music resumes while locked; after unlock, Maps opens into the trip and navigation runs |
 | S8 | Trip + music, phone locked, drop, **auto-reconnect**, then unlock | After unlock nothing pops up (no Maps); phone stays where it was |
+| S9 | Trip + music, **car stopped** at the drop, then drives on | While stopped: music off, Maps not opened, waiting. Once moving: music resumes, trip running, Maps in front |
+| S10 | Trip + music, car stopped at the drop, **Android Auto reconnects by itself** | Waits while disconnected; stands down on reconnect; nothing rescued or tapped |
+
+S1–S6 run with the car "driving": the phone sits on a desk, so `matrix.sh` fakes the speed
+(`--ef speed 30`) and S9/S10 set it to 0 for the drop.
 
 S7 and S8 are manual because they need a fingerprint/PIN unlock. Steps:
 
@@ -96,6 +101,17 @@ S7 and S8 are manual because they need a fingerprint/PIN unlock. Steps:
    `adb shell dumpsys activity service dev.nish.aarescue/.MediaWatcher`.
 
 ## Results
+
+**v0.1.8** · 2026-11-15 · Pixel 9, DHU 2.1 over wireless adb
+
+Added *Wait until the car moves*. S1–S6: **19/19**, S9: **6/6**, S10: **3/3** (S3/S4 again
+needed a second run after the script failed to start a trip on the car screen). S7/S8
+(manual) not re-run. GPS readings arrived once a second with the app in the background.
+
+After the last drop the phone stayed still on real GPS: the app waited, then gave up after
+5 min ("Car didn't move — left as is") and stopped reading GPS.
+
+Not covered: real speeds from a moving car.
 
 **v0.1.7** · 2026-11-15 · Pixel 9, DHU 2.1 over wireless adb
 

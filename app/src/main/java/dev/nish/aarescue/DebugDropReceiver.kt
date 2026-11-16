@@ -9,11 +9,13 @@ import android.content.Intent
  * the shell/system holds):
  *   adb shell am broadcast -n dev.nish.aarescue/.DebugDropReceiver --ez nav true
  * --ez real true goes through the real-drop path (picks music from what just stopped).
+ * --ef speed 30 fakes the car's speed in km/h (negative: back to GPS).
  * --ez connect true pretends Android Auto just connected (autoplay stop) instead of dropping.
  */
 class DebugDropReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         Rescue.init(context)
+        if (intent.hasExtra("speed")) return Motion.setFake(intent.getFloatExtra("speed", -1f))
         if (intent.getBooleanExtra("connect", false)) return Rescue.simulateConnect()
         val nav = intent.getBooleanExtra("nav", false)
         if (intent.getBooleanExtra("real", false)) Rescue.simulateRealDrop(nav) else Rescue.simulateDrop(nav)

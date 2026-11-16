@@ -50,7 +50,7 @@ class MediaWatcher : NotificationListenerService() {
     /** `adb shell dumpsys activity service dev.nish.aarescue/.MediaWatcher` prints the trace log. */
     override fun dump(fd: java.io.FileDescriptor?, writer: java.io.PrintWriter, args: Array<out String>?) {
         // First line: live state, for scripts/e2e.sh. Then the trace log.
-        writer.println("STATE projecting=${Rescue.isProjecting()} trip=${navKey != null} playing=${playingNow.sorted()}")
+        writer.println("STATE projecting=${Rescue.isProjecting()} trip=${navKey != null} playing=${playingNow.sorted()} waiting=${Rescue.waitingForMove()} ${Motion.describe()}")
         if (args?.contains("state") != true) writer.print(RescueLog.readTrace())
     }
 

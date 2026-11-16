@@ -7,7 +7,9 @@ import android.os.Bundle
 import android.provider.Settings
 import android.text.format.DateUtils
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -44,6 +46,7 @@ class MainActivity : ComponentActivity() {
 private data class UiState(
     val listener: Boolean,
     val a11y: Boolean,
+    val location: Boolean,
     val projecting: Boolean,
     val running: Boolean,
     val events: List<RescueLog.Event>,
@@ -55,6 +58,7 @@ private fun Home() {
     fun read() = UiState(
         listener = enabled(ctx, "enabled_notification_listeners", MediaWatcher::class.java),
         a11y = enabled(ctx, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, MapsClicker::class.java),
+        location = Motion.hasPermission(ctx),
         projecting = Rescue.isProjecting(),
         running = MediaWatcher.instance != null && MapsClicker.instance != null,
         events = RescueLog.readEvents(),
@@ -63,6 +67,8 @@ private fun Home() {
     var music by remember { mutableStateOf(Prefs.resumeMusic(ctx)) }
     var nav by remember { mutableStateOf(Prefs.resumeNav(ctx)) }
     var autoplay by remember { mutableStateOf(Prefs.stopAutoplay(ctx)) }
+    var moving by remember { mutableStateOf(Prefs.waitForMoving(ctx)) }
+    val askLocation = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {}
     var enabled by remember { mutableStateOf(Prefs.enabled(ctx)) }
     var showInfo by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
@@ -79,7 +85,7 @@ private fun Home() {
     ) {
         Header(state, enabled, onEnabled = { enabled = it; Prefs.setEnabled(ctx, it) }, onInfo = { showInfo = true })
 
-        if (!state.listener || !state.a11y) {
+        if (!state.listener || !state.a11y || (moving && !state.location)) {
             Section("Setup") {
                 SetupRow(
                     done = state.listener,
@@ -96,6 +102,22 @@ private fun Home() {
                         )
                     },
                 ) { ctx.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
+                if (moving) SetupRow(
+                    done = state.location,
+                    title = "Car movement",
+                    body = "Location → Allow all the time (tap Turn on twice: first Precise, then All the time). " +
+                        "Only the speed is used, and it can't leave the phone.",
+                ) {
+                    val fine = ctx.checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) ==
+                        android.content.pm.PackageManager.PERMISSION_GRANTED
+                    askLocation.launch(
+                        if (fine) arrayOf(android.Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                        else arrayOf(
+                            android.Manifest.permission.ACCESS_FINE_LOCATION,
+                            android.Manifest.permission.ACCESS_COARSE_LOCATION,
+                        )
+                    )
+                }
             }
         }
 
@@ -106,6 +128,11 @@ private fun Home() {
             ToggleRow(Icons.Outlined.Navigation, "Resume navigation", "Only during an active trip", nav, enabled) {
                 nav = it; Prefs.setResumeNav(ctx, it)
             }
+            ToggleRow(
+                Icons.Outlined.Speed, "Wait until the car moves",
+                "Stopped at the drop (red light, or car switched off)? Rescue only once it drives on",
+                moving, enabled,
+            ) { moving = it; Prefs.setWaitForMoving(ctx, it) }
         }
 
         Section("When Android Auto connects") {

@@ -2,8 +2,8 @@
 # Scenario matrix: real Android Auto session (DHU) + real drops, checks real phone state after.
 # Setup and process: docs/INTEGRATION_TESTS.md
 #
-# Usage: scripts/matrix.sh <adb-serial> [s1 s2 s3 s4 s5 s6]
-SERIAL=$1; shift; CASES=${*:-"s1 s2 s3 s4 s5 s6"}
+# Usage: scripts/matrix.sh <adb-serial> [s1 s2 s3 s4 s5 s6 s9 s10]
+SERIAL=$1; shift; CASES=${*:-"s1 s2 s3 s4 s5 s6 s9 s10"}
 S=${TMPDIR:-/tmp}/aa-rescue-e2e; mkdir -p "$S"; DHU_DIR=~/Library/Android/sdk/extras/google/auto
 a(){ ~/Library/Android/sdk/platform-tools/adb -s "$SERIAL" "$@"; }
 now_ms(){ echo $(($(date +%s)*1000)); }
@@ -28,6 +28,8 @@ dhu_up(){
 dhu_down(){ pkill -f desktop-head-unit; pkill -f "tail -f $S/dhu.in"; }
 music(){ a shell cmd media_session dispatch "$1"; }
 car(){ echo "$*" > "$S/dhu.in"; }
+# Fake the car's speed in km/h (the phone sits on a desk); negative = back to GPS.
+speed(){ a shell am broadcast -n dev.nish.aarescue/.DebugDropReceiver --ef speed "$1" >/dev/null; }
 # Start/end a trip on the car screen (DHU 800x480): first suggestion → Start; trip card ✕.
 trip_on(){ state | grep -q "trip=true" && return 0
   car tap 250 225; sleep 4; car tap 177 277; sleep 8
@@ -40,6 +42,7 @@ run_drop(){ [ "$KEEP_FRONT" = 1 ] || a shell input keyevent KEYCODE_HOME; sleep 
   log "  after:  $AFTER front=$FRONT"; echo "$TR" | grep -E "DROP|EVENT|tapped|opened" | sed 's/^/      /'; }
 
 a shell svc power stayon true; a shell input keyevent KEYCODE_WAKEUP
+speed 30   # S1-S6: the car is driving when the screen drops
 
 for c in $CASES; do case $c in
 s1) log "S1: no trip, no music"
@@ -74,7 +77,24 @@ s6) log "S6: two drops in a row"
     for n in 1 2; do dhu_up || exit 1; music play; trip_on; sleep 3; run_drop
       check "drop $n: music resumed" 'echo "$AFTER" | grep -q "youtube.music"'
       check "drop $n: trip running" 'echo "$AFTER" | grep -q "trip=true"'; done ;;
+s9) log "S9: trip + music, car STOPPED at the drop (red light / switched off), then drives on"
+    dhu_up || exit 1; music play; trip_on; sleep 3; speed 0; run_drop
+    check "stopped: music stays off" '! echo "$AFTER" | grep -q "youtube.music"'
+    check "stopped: Maps not opened" '! echo "$TR" | grep -q "Maps opened"'
+    check "stopped: waiting for the car to move" 'echo "$AFTER" | grep -q "waiting=true"'
+    T=$(now_ms); speed 30; sleep 10; AFTER=$(state); FRONT=$(front); TR=$(trace_since $T)
+    log "  moving: $AFTER front=$FRONT"; echo "$TR" | grep -E "EVENT|tapped|opened" | sed 's/^/      /'
+    check "moving: music resumed" 'echo "$AFTER" | grep -q "youtube.music"'
+    check "moving: trip running" 'echo "$AFTER" | grep -q "trip=true"'
+    check "moving: Maps in front" '[ "$FRONT" = com.google.android.apps.maps ]' ;;
+s10) log "S10: trip + music, car stopped at the drop, Android Auto reconnects by itself"
+    dhu_up || exit 1; music play; trip_on; sleep 3; speed 0; T=$(now_ms); log "  before: $(state)"
+    dhu_down; sleep 6; MID=$(state); dhu_up; sleep 4; speed 30; sleep 6; AFTER=$(state); TR=$(trace_since $T)
+    log "  while disconnected: $MID"; log "  after reconnect:    $AFTER"; echo "$TR" | grep -E "EVENT|tapped|opened" | sed 's/^/      /'
+    check "waited while stopped" 'echo "$MID" | grep -q "waiting=true"'
+    check "stood down after reconnect" 'echo "$AFTER" | grep -q "projecting=true.*waiting=false"'
+    check "nothing rescued or tapped" '! echo "$TR" | grep -qE "Car is moving again|tapped|Maps opened"' ;;
 esac; done
 
-dhu_down; a shell svc power stayon false
+speed -1; dhu_down; a shell svc power stayon false
 log "RESULT: $PASS passed, $FAIL failed"
